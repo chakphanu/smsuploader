@@ -31,6 +31,7 @@ import java.util.*
 class MainActivity : AppCompatActivity() {
 
     var accessToken: String = ""
+    var deviceId: Int = 0
 
     var hasConfig: Boolean = false
 
@@ -61,9 +62,9 @@ class MainActivity : AppCompatActivity() {
                         try {
                             val jwt: JWT = JWT(jwtString)
                             this@MainActivity.runOnUiThread(Runnable {
-                                tvDeviceName.text = "Device name: " + jwt.getClaim("devicename").asString()
-                                tvForwardTo.text = "Forward to: " + jwt.getClaim("partnername").asString()
-                                tvForwardToken.text = "Forward token: " + jwt.getClaim("partnertoken").asString()
+                                tvDeviceName.text = "Device name: " + jwt.getClaim("device_name").asString()
+                                tvForwardTo.text = "Forward to: " + jwt.getClaim("partner_name").asString()
+                                tvForwardToken.text = "Forward token: " + jwt.getClaim("partner_token").asString()
                             })
                         }catch (e: Exception) {
                             Log.d(TAG, "CJE0 Exception: " + e.toString())
@@ -108,7 +109,8 @@ class MainActivity : AppCompatActivity() {
             {
                 hasConfig = true
                 accessToken = sharedPref.getString("accessToken","")
-                tvDeviceId.text = "DID: " + accessToken
+                deviceId = sharedPref.getInt("deviceId", 0)
+                tvDeviceId.text = "DID: " + deviceId.toString()
                 tvUid.text = "Username: " + sharedPref.getString("uid","")
             }else{
                 quickSetup()
@@ -172,9 +174,10 @@ class MainActivity : AppCompatActivity() {
                         it.putBoolean("hasConfig", true)
                         it.putString("uid", config.uid)
                         it.putString("accessToken", config.accessToken)
-                        it.putString("endpointSmss",config.endpointSmss)
-                        it.putString("endpointPing",config.endpointPing)
-                        it.putString("endpointJwt",config.endpointJwt)
+                        it.putString("endpointSms", config.endpointSms)
+                        it.putString("endpointPing", config.endpointPing)
+                        it.putString("endpointJwt", config.endpointJwt)
+                        it.putInt("deviceId", config.deviceId)
                         it.apply()
                     }
 

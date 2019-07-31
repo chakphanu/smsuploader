@@ -71,7 +71,7 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
 
 
         fixedRateTimer(name = "ping-timer",
-                initialDelay = 30000, period = 60000) {
+                initialDelay = 1000, period = 60000) {
             Log.d(TAG,Date().toString() + " ping-timer")
             ping()
         }
@@ -84,10 +84,11 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
         val sharedPref = PreferenceManager.getDefaultSharedPreferences(this)
         if(sharedPref.getBoolean("hasConfig", false)) {
             hasConfig = true
-            endpointSmss = sharedPref.getString("endpointSmss","")
+            endpointSms = sharedPref.getString("endpointSms","")
             endpointPing = sharedPref.getString("endpointPing","")
             endpointJwt = sharedPref.getString("endpointJwt","")
             accessToken = sharedPref.getString("accessToken","")
+            deviceId = sharedPref.getInt("deviceId",0)
             uid = sharedPref.getString("uid","")
             Log.d(TAG, "onCreate: jwtToken: $jwtToken.")
 
@@ -234,7 +235,9 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
         Log.d(TAG + " getJWT():>","getJWT")
         try {
             val json = JSONObject()
-            json.put("accessToken",accessToken)
+            json.put("deviceId", deviceId)
+            json.put("accessToken", accessToken)
+            json.put("clientVersion", 1)
             // blocking mode
             val (request, _, result) = endpointJwt.httpPost().timeout(timeout).timeoutRead(timeoutRead)
                     .header(mapOf("Content-Type" to "application/json"))
@@ -245,7 +248,7 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
                 return json.obj().getString("jwtToken")
             }, failure = { error ->
                 Log.e(TAG + " getJWT():>", "getJWT failure: " + error.toString())
-                //Log.d(TAG + " getJWT():>", "getJWT request: " + request.toString())
+                Log.d(TAG + " getJWT():>", "getJWT request: " + request.toString())
                 sendLogToMain(error.toString())
             })
         }catch(e: MalformedURLException){
@@ -291,7 +294,7 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
 
         try{
             // blocking mode
-            val (request, _, result) = endpointSmss.httpPost().timeout(timeout).timeoutRead(timeoutRead)
+            val (request, _, result) = endpointSms.httpPost().timeout(timeout).timeoutRead(timeoutRead)
                     .header(mapOf(
                             "Content-Type" to "application/json",
                             "Authorization" to "Bearer ${jwtToken}"
@@ -305,21 +308,22 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
                         Paper.book().write("smsfail_" + UUID.randomUUID().toString(),
                                 Gson().fromJson( json.toString(), SmsReceive::class.java))
                         Log.d(TAG + " uploadSMS():>", "BE0 jwtToken: $jwtToken")
-                        Log.d(TAG + " uploadSMS():>", "BE0 postUrl: $endpointSmss")
+                        Log.d(TAG + " uploadSMS():>", "BE0 postUrl: $endpointSms")
                         Log.d(TAG + " uploadSMS():>", "BE0 exception: " + result.getException().toString())
                         Log.d(TAG + " uploadSMS():>", "BE0 request: " + request.toString())
                         startRetryTimer()
                     }
                     is Result.Success -> {
                         stat.incrSuccess()
+                        Log.d(TAG + " uploadSMS():>", "BE0 request: " + request.toString())
                         Log.d(TAG + " uploadSMS():>", "BI0 " + result.get().content)
                     }
             }
         }catch(e: MalformedURLException){
-            Log.d(TAG + " uploadSMS():>","BE1 MalformedURLException to $endpointSmss")
+            Log.d(TAG + " uploadSMS():>","BE1 MalformedURLException to $endpointSms")
             Log.d(TAG + " uploadSMS():>",e.toString())
         }catch(e: Exception){
-            Log.d(TAG + " uploadSMS():>","BE2 Exception to $endpointSmss")
+            Log.d(TAG + " uploadSMS():>","BE2 Exception to $endpointSms")
             Log.d(TAG + " uploadSMS():>",e.toString())
         }
 
@@ -362,7 +366,7 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
             try{
                 smsReceive = Paper.book().read(it)
                 Log.d(TAG + " retryUpload():>", "retryUpload allKeys.forEach: " + smsReceive.toString())
-                val (request, _, result) = endpointSmss.httpPost().timeout(timeout).timeoutRead(timeoutRead)
+                val (request, _, result) = endpointSms.httpPost().timeout(timeout).timeoutRead(timeoutRead)
                         .header(mapOf(
                                 "Content-Type" to "application/json",
                                 "Authorization" to "Bearer ${jwtToken}"
@@ -372,7 +376,7 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
                 when (result) {
                     is Result.Failure -> {
                         Log.d(TAG + " retryUpload():>", "retryUpload R01 jwtToken: ${jwtToken}")
-                        Log.d(TAG + " retryUpload():>", "retryUpload postUrl: ${endpointSmss}")
+                        Log.d(TAG + " retryUpload():>", "retryUpload postUrl: ${endpointSms}")
                         Log.d(TAG + " retryUpload():>", "retryUpload R01 exception: " + result.getException().toString())
                         Log.d(TAG + " retryUpload():>", "retryUpload R01 request: " + request.toString())
                     }
@@ -380,14 +384,15 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
                         stat.incrSuccess()
                         stat.decrRetry()
                         Paper.book().delete(it)
-                        Log.d(TAG + " retryUpload():>", "retryUpload E0 " + result.get().content)
+                        Log.d(TAG + " retryUpload():>", "RU0 request: " + request.toString())
+                        Log.d(TAG + " retryUpload():>", "retryUpload RU0 " + result.get().content)
                     }
                 }
             }catch(e: MalformedURLException){
-                Log.d(TAG + " retryUpload():>","retryUpload E2 MalformedURLException to $endpointSmss")
+                Log.d(TAG + " retryUpload():>","retryUpload E2 MalformedURLException to $endpointSms")
                 Log.d(TAG + " retryUpload():>",e.toString())
             }catch(e: Exception){
-                Log.d(TAG + " retryUpload():>","retryUpload E2 Exception to $endpointSmss")
+                Log.d(TAG + " retryUpload():>","retryUpload E2 Exception to $endpointSms")
                 Log.d(TAG + " retryUpload():>",e.toString())
             }
         }
@@ -429,7 +434,7 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
             json.put("line1Number", tm.line1Number)
             json.put("simSerialNumber", tm.simSerialNumber)
             json.put("dataState",tm.dataState)
-            json.put("deviceId",tm.deviceId)
+            json.put("tmDeviceId",tm.deviceId)
             json.put("deviceSoftwareVersion",android.os.Build.VERSION.RELEASE)
             json.put("phoneModel",android.os.Build.MODEL)
 
@@ -587,10 +592,11 @@ class UploaderIntentService : IntentService("UploaderIntentService") {
 
         var retryTimer: Timer? = null
 
-        var endpointSmss: String = ""
+        var endpointSms: String = ""
         var endpointPing: String = ""
         var endpointJwt: String = ""
         var accessToken: String = ""
+        var deviceId : Int = 0
         var jwtToken: String = ""
         var uid: String = ""
 

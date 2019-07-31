@@ -4,7 +4,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.provider.Telephony
-import android.telephony.TelephonyManager
 import android.util.Log
 import io.paperdb.Paper
 import org.json.JSONObject
@@ -35,12 +34,6 @@ class SmsBroadcastReceiver: BroadcastReceiver(){
         Paper.init(context)
         try
         {
-            val tm = context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
-            json.put("imei", tm.imei)
-            json.put("operator_name", tm.networkOperatorName)
-            json.put("line_number", tm.line1Number)
-            json.put("device_id",tm.deviceId)
-
             UploaderIntentService.startActionSms(context, json.toString())
             Log.d(TAG,json.toString())
         }
